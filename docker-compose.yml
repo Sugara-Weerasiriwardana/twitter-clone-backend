@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:14
+    image: postgres:15
     restart: always
+    container_name: postgres-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -26,6 +27,21 @@ services:
     ports:
       - "6379:6379"
 
+  app:
+    build: .
+    container_name: nest-app
+    depends_on:
+      - postgres
+      - mongo
+      - redis
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/twitterx_db
+      MONGODB_URL: mongodb://mongo:27017/twitterx
+      JWT_SECRET: super-secret-key
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && npm run start:prod"
+
 volumes:
   pgdata:
-  mongodata: 
+  mongodata:

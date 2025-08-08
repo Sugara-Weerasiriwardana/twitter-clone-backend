@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { CreatePostDto, UpdatePostDto } from './dto';
 import { Post, PostDocument } from './schemas/post.schema';
 
@@ -20,11 +22,14 @@ interface PaginationOptions {
 export class PostsService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    private prisma: PrismaService,
+    private redisService: RedisService,
   ) {}
 
-  async create(createPostDto: CreatePostDto): Promise<Post> {
+  async create(createPostDto: CreatePostDto, pollDto?: any): Promise<Post> {
     const post = new this.postModel({
       ...createPostDto,
+      poll_id: null,
       likes: [],
       retweets: [],
       bookmarks: [],
@@ -37,7 +42,45 @@ export class PostsService {
       reportedBy: [],
       isDeleted: false,
     });
-    return post.save();
+
+    const savedPost = await post.save();
+
+    if (pollDto) {
+      try {
+        // First, ensure the user exists in PostgreSQL
+        const existingUser = await this.prisma.user.findUnique({
+          where: { id: pollDto.userId }
+        });
+
+        if (!existingUser) {
+          // Create a basic user if it doesn't exist
+          await this.prisma.user.create({
+            data: {
+              id: pollDto.userId,
+              keycloakId: pollDto.userId, // Using userId as keycloakId for simplicity
+              username: `user_${pollDto.userId}`,
+              email: `${pollDto.userId}@example.com`,
+              displayName: `User ${pollDto.userId}`,
+            }
+          });
+        }
+
+        const poll = await this.prisma.poll.create({
+          data: {
+            ...pollDto,
+            postId: savedPost._id.toString(),
+          },
+        });
+        
+        savedPost.poll_id = poll.id;
+        await savedPost.save();
+      } catch (error) {
+        console.error('Error creating poll:', error);
+        // Continue without poll if there's an error
+      }
+    }
+
+    return savedPost;
   }
 
   async findAll(options: FindAllOptions): Promise<{ posts: Post[]; total: number; page: number; limit: number }> {
@@ -141,13 +184,12 @@ export class PostsService {
     if (!originalPost) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
     }
-
-    // Check if user already retweeted
+//  check if user already retweeted
     if (originalPost.retweets.includes(userId)) {
       throw new Error('User has already retweeted this post');
     }
 
-    // Create retweet
+//   create retweet post function
     const retweet = new this.postModel({
       content: originalPost.content,
       media: originalPost.media,
@@ -170,7 +212,7 @@ export class PostsService {
 
     await retweet.save();
 
-    // Update original post retweets count
+//  update original post retweets count function
     originalPost.retweets.push(userId);
     await originalPost.save();
 
@@ -183,11 +225,11 @@ export class PostsService {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
     }
 
-    // Remove from original post retweets
+//  delete original retweet post funtion
     originalPost.retweets = originalPost.retweets.filter(retweetId => retweetId !== userId);
     await originalPost.save();
 
-    // Delete the retweet post
+//    Delete funtion for retweet post
     await this.postModel.findOneAndDelete({
       originalPostId: id,
       authorId: userId,
@@ -254,6 +296,14 @@ export class PostsService {
     const { page, limit } = options;
     const skip = (page - 1) * limit;
 
+    // Try to get cached results first
+    const cacheKey = `search:${query}:${page}:${limit}`;
+    const cachedResults = await this.redisService.getSearchResults(cacheKey);
+    
+    if (cachedResults) {
+      return cachedResults as { posts: Post[]; total: number; page: number; limit: number };
+    }
+
     const searchQuery = {
       $and: [
         { isDeleted: false },
@@ -277,12 +327,17 @@ export class PostsService {
       this.postModel.countDocuments(searchQuery).exec(),
     ]);
 
-    return {
+    const results = {
       posts,
       total,
       page,
       limit,
     };
+
+    // Cache the results
+    await this.redisService.cacheSearchResults(cacheKey, results, 300);
+
+    return results;
   }
 
   async getTrendingHashtags(limit: number): Promise<{ hashtag: string; count: number }[]> {

@@ -1,4 +1,3 @@
-// src/posts/schemas/post.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
@@ -6,53 +5,50 @@ export type PostDocument = Post & Document;
 
 @Schema({ timestamps: true })
 export class Post {
-  @Prop({ required: true, maxlength: 280 })
+  @Prop({ required: true })
   content: string;
 
-  @Prop({ type: [String], default: [] })
+  @Prop({ required: true })
+  authorId: string;
+
+  @Prop([String])
   media: string[];
 
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   hashtags: string[];
 
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   mentions: string[];
 
   @Prop({ type: String, ref: 'Poll' })
-  pollId?: string;
+  poll_id?: string;
 
-  @Prop({ required: true, type: String })
-  authorId: string;
-
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   likes: string[];
 
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   retweets: string[];
 
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   bookmarks: string[];
 
-  @Prop({ type: String, ref: 'Post' })
-  parentPostId?: string; // For replies
-
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   replies: string[];
 
   @Prop({ default: false })
   isRetweet: boolean;
 
-  @Prop({ type: String, ref: 'Post' })
-  originalPostId?: string; // For retweets
+  @Prop({ type: String, default: null })
+  originalPostId: string;
+
+  @Prop({ type: String, default: null })
+  parentPostId: string;
 
   @Prop({ default: false })
   isEdited: boolean;
 
-  @Prop({ type: Date })
-  editedAt?: Date;
-
   @Prop({ default: 'public' })
-  visibility: 'public' | 'private' | 'followers';
+  visibility: string;
 
   @Prop({ default: false })
   isPinned: boolean;
@@ -60,25 +56,14 @@ export class Post {
   @Prop({ default: 0 })
   views: number;
 
-  @Prop({ type: [String], default: [] })
+  @Prop([String])
   reportedBy: string[];
 
   @Prop({ default: false })
   isDeleted: boolean;
 
-  @Prop({ type: Date })
+  @Prop()
   deletedAt?: Date;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
-
-// Indexes for better query performance
-PostSchema.index({ authorId: 1, createdAt: -1 });
-PostSchema.index({ hashtags: 1 });
-PostSchema.index({ mentions: 1 });
-PostSchema.index({ content: 'text' });
-PostSchema.index({ parentPostId: 1 });
-PostSchema.index({ originalPostId: 1 });
-PostSchema.index({ createdAt: -1 });
-PostSchema.index({ likes: 1 });
-PostSchema.index({ retweets: 1 });
