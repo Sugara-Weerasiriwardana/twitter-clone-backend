@@ -7,8 +7,10 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { MediaModule } from './media/media.module';
 import { PollsModule } from './polls/polls.module';
 import { PostsModule } from './posts/posts.module';
+import { CommentsModule } from './comments/comments.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { RedisModule } from './redis/redis.module';
     MediaModule,
     PollsModule,
     RedisModule,
+    CommentsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
