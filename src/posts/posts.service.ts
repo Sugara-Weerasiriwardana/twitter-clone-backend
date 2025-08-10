@@ -363,4 +363,61 @@ export class PostsService {
 
     return result;
   }
+
+  async testRedisCache() {
+    return this.redisService.getCacheStats();
+  }
+
+  async getTimeline(userId: string, options: PaginationOptions): Promise<{ posts: Post[]; total: number; page: number; limit: number }> {
+    const { page, limit } = options;
+    const skip = (page - 1) * limit;
+
+    // Try to get cached timeline first
+    const cacheKey = `timeline:${userId}:${page}:${limit}`;
+    const cachedTimeline = await this.redisService.getFeed(cacheKey);
+    
+    if (cachedTimeline) {
+      return cachedTimeline as { posts: Post[]; total: number; page: number; limit: number };
+    }
+
+    // Get user's following list from PostgreSQL
+    const following = await this.prisma.follow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true }
+    });
+
+    const followingIds = following.map(f => f.followingId);
+
+    // Add user's own posts to timeline
+    followingIds.push(userId);
+
+    // Get posts from followed users and user's own posts
+    const [posts, total] = await Promise.all([
+      this.postModel
+        .find({
+          authorId: { $in: followingIds },
+          isDeleted: false
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.postModel.countDocuments({
+        authorId: { $in: followingIds },
+        isDeleted: false
+      }).exec(),
+    ]);
+
+    const timeline = {
+      posts,
+      total,
+      page,
+      limit,
+    };
+
+    // Cache the timeline for 5 minutes
+    await this.redisService.cacheFeed(cacheKey, timeline, 300);
+
+    return timeline;
+  }
 }

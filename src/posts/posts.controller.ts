@@ -158,6 +158,10 @@ export class PostsController {
     });
   }
 
+
+
+
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific post by ID' })
   @ApiParam({ name: 'id', description: 'Post ID', example: 'post123' })
@@ -358,5 +362,55 @@ export class PostsController {
     @Query('limit') limit: string = '10',
   ) {
     return this.postsService.getTrendingHashtags(parseInt(limit));
+  }
+
+  @Get('test/redis')
+  @ApiOperation({ summary: 'Test Redis cache functionality' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Redis cache test results',
+    schema: {
+      example: {
+        status: 'healthy',
+        message: 'Cache is working properly',
+        timestamp: '2024-01-01T00:00:00Z'
+      }
+    }
+  })
+  async testRedis() {
+    return this.postsService.testRedisCache();
+  }
+
+  @Get('timeline')
+  @ApiOperation({ summary: 'Get user timeline with posts from followed users' })
+  @ApiQuery({ name: 'userId', description: 'User ID', required: true, example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef' })
+  @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', description: 'Number of posts per page', required: false, type: Number, example: 10 })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Timeline retrieved successfully',
+    schema: {
+      example: {
+        posts: [
+          {
+            _id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+            content: 'This is a timeline post!',
+            authorId: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+            hashtags: ['timeline', 'post'],
+            createdAt: '2024-01-01T00:00:00Z'
+          }
+        ],
+        total: 1,
+        page: 1,
+        limit: 10
+      }
+    }
+  })
+  async getTimeline(
+    @Query('userId') userId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return this.postsService.getTimeline(userId, { page: parseInt(page), limit: parseInt(limit) });
   }
 }

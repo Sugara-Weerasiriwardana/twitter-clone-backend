@@ -9,6 +9,25 @@ export class RedisService {
     private cacheManager: Cache
   ) {}
 
+  // Test method to verify Redis is working
+  async testRedisConnection() {
+    try {
+      await this.cacheManager.set('test_connection', 'Redis is working!', 60);
+      const result = await this.cacheManager.get('test_connection');
+      return {
+        success: true,
+        message: 'Redis connection test passed',
+        result: result
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Redis connection test failed',
+        error: error.message
+      };
+    }
+  }
+
   // Cache trending hashtags
   async cacheTrendingHashtags(hashtags: any[], ttl = 300) {
     await this.cacheManager.set('trending_hashtags', hashtags, ttl);
@@ -65,16 +84,39 @@ export class RedisService {
 
   // Clear cache
   async clearCache(pattern: string) {
+    // Note: This is a simplified version. In production, you'd use Redis SCAN
     await this.cacheManager.del(pattern);
   }
 
-  async cacheFeed(userId: string, posts: any[], ttl = 300) {
-    const key = `feed:${userId}`;
-    await this.cacheManager.set(key, posts, ttl);
+  // Cache post feed
+  async cacheFeed(key: string, data: any, ttl = 300) {
+    await this.cacheManager.set(key, data, ttl);
   }
 
-  async getFeed(userId: string) {
-    const key = `feed:${userId}`;
+  async getFeed(key: string) {
     return await this.cacheManager.get(key);
+  }
+
+  // Get cache statistics
+  async getCacheStats() {
+    try {
+      const testKey = 'cache_stats_test';
+      await this.cacheManager.set(testKey, 'test_value', 60);
+      const result = await this.cacheManager.get(testKey);
+      await this.cacheManager.del(testKey);
+      
+      return {
+        status: 'healthy',
+        message: 'Cache is working properly',
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Cache is not working',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 } 

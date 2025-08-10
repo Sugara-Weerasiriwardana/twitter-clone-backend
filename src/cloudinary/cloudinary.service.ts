@@ -13,7 +13,6 @@ export class CloudinaryService {
         buffer: file.buffer ? 'present' : 'missing'
       });
 
-      // Convert buffer to data URI
       const dataUri = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
       
       const result = await cloudinary.uploader.upload(dataUri, {
@@ -29,17 +28,13 @@ export class CloudinaryService {
     }
   }
 
-  /**
-   * Upload multiple files to Cloudinary
-   */
+  
   async uploadMultipleFiles(files: Express.Multer.File[]): Promise<any[]> {
     const uploadPromises = files.map(file => this.uploadMedia(file));
     return Promise.all(uploadPromises);
   }
 
-  /**
-   * Delete a file from Cloudinary
-   */
+  
   async deleteFile(publicId: string): Promise<any> {
     try {
       const result = await cloudinary.uploader.destroy(publicId);
