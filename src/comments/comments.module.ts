@@ -1,4 +1,3 @@
-// comments.module.ts
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Comment, CommentSchema } from '../mongo/schemas/comment.schema';
@@ -11,6 +10,6 @@ import { CommentController } from './comments.controller';
   ],
   controllers: [CommentController],
   providers: [CommentService],
-  exports: [CommentService], // Export if other modules need comment logic
+  exports: [CommentService], 
 })
 export class CommentsModule {}
