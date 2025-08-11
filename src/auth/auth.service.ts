@@ -7,17 +7,19 @@ import { JwtService } from '@nestjs/jwt';
 export class AuthService {
   constructor(private prisma: PrismaService, private jwt: JwtService) {}
 
-  async signup(email: string, password: string) {
+  async signup(email: string, password: string, username: string) {
     const hash = await bcrypt.hash(password, 10);
 
     const user = await this.prisma.user.create({
-      data: { email, password: hash },
+      data: { email, password: hash, username },
     });
 
     const token = this.signToken(user.id, user.email);
 
     return {
       message: 'User signed up successfully',
+      username: user.username,
+      email: user.email,
       ...token,
     };
   }
@@ -33,11 +35,13 @@ export class AuthService {
 
     return {
       message: 'Login successful',
+      username: user.username,
+      email: user.email,
       ...token,
     };
   }
 
-  private signToken(userId: String, email: string): { access_token: string } {
+  private signToken(userId: string, email: string): { access_token: string } {
     const payload = { sub: userId, email };
     const token = this.jwt.sign(payload);
     return { access_token: token };
