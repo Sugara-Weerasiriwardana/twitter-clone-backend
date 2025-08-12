@@ -22,6 +22,7 @@ model User {
   pollVotes   PollVote[]
   polls       Poll[]
   password    String?
+  preferences Json?
 
   @@map("users")
 }
