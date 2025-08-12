@@ -11,6 +11,6 @@ import { Notification, NotificationSchema } from './schemas/notification.schema'
     JwtModule.register({ secret: process.env.JWT_SECRET }),
   ],
   providers: [NotificationsGateway, NotificationsService],
-  exports: [NotificationsService], // export if used elsewhere
+  exports: [NotificationsService], 
 })
 export class NotificationsModule {}

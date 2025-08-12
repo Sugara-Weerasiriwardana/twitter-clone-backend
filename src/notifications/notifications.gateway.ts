@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: true }, // tighten in prod
+  cors: { origin: true }, 
   path: '/socket.io',
 })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -19,14 +19,14 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   @WebSocketServer()
   server: Server;
 
-  // Map userId -> Set of socketIds (multiple devices)
+  
   private users = new Map<string, Set<string>>();
 
   constructor(private jwtService: JwtService) {}
 
   async handleConnection(client: Socket) {
     try {
-      // Expect token in handshake auth: { token: "..." } OR Authorization header
+      
       const token =
         (client.handshake.auth && client.handshake.auth.token) ||
         (client.handshake.headers && (client.handshake.headers.authorization as string)?.split(' ')[1]);
@@ -45,10 +45,10 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
         return;
       }
 
-      // attach userId to socket for reference
+      
       (client as any).data = { userId };
 
-      // register socket
+      
       const sockets = this.users.get(userId) ?? new Set<string>();
       sockets.add(client.id);
       this.users.set(userId, sockets);
@@ -74,7 +74,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`User ${userId} disconnected from socket ${client.id}`);
   }
 
-  // method other services can call to notify a user
+  
   sendNotificationToUser(userId: string, payload: any) {
   const sockets = this.users.get(userId);
   if (!sockets || sockets.size === 0) {
@@ -91,7 +91,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 }
 
 
-  // optionally broadcast to all (for admin events)
+  
   broadcast(payload: any) {
     this.server.emit('notification', payload);
   }

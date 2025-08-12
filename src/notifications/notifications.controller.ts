@@ -10,20 +10,20 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 export class NotificationsController {
   constructor(private notificationsService: NotificationsService) {}
 
-  // GET /notifications
+  
   @Get()
   async getMyNotifications(@Request() req) {
     const userId = req.user.sub;
     return this.notificationsService.findForUser(userId);
   }
 
-  // PATCH /notifications/:id/read
+  
   @Patch(':id/read')
   async markRead(@Param('id') id: string) {
     return this.notificationsService.markAsRead(id);
   }
 
-  // PATCH /notifications/read-all
+  
   @Patch('read-all')
   async markAllRead(@Request() req) {
     const userId = req.user.sub;

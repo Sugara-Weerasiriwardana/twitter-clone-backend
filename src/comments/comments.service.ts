@@ -39,7 +39,7 @@ export class CommentService {
     }
     this.logger.log(`Post found with authorId: ${post.authorId}`);
 
-    // Use notification service to create & send notification
+    
     await this.notificationsService.create(
       post.authorId,
       parentCommentId ? 'reply' : 'comment',
