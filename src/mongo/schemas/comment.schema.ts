@@ -1,4 +1,3 @@
-// comment.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
@@ -20,6 +19,9 @@ export class Comment {
 
   @Prop([String])
   likes: string[]; // Store user IDs who liked the comment
+
+  createdAt?: Date; // <-- declare explicitly
+  updatedAt?: Date;
 }
 
 export const CommentSchema = SchemaFactory.createForClass(Comment);
