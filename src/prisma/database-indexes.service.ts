@@ -19,13 +19,18 @@ export class DatabaseIndexesService {
     try {
       const indexes = await this.prisma.$queryRaw`
         SELECT 
-          schemaname,
-          tablename,
-          indexname,
-          indexdef
-        FROM pg_indexes 
-        WHERE schemaname = 'public'
-        ORDER BY tablename, indexname;
+          i.relname as index_name,
+          t.relname as table_name,
+          a.attname as column_name,
+          ix.indisunique as is_unique,
+          ix.indisprimary as is_primary
+        FROM pg_index ix
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_class t ON t.oid = ix.indrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'public'
+        ORDER BY t.relname, i.relname;
       `;
       
       return {
@@ -97,15 +102,17 @@ export class DatabaseIndexesService {
       // PostgreSQL stats
       const postgresStats = await this.prisma.$queryRaw`
         SELECT 
-          schemaname,
-          tablename,
-          n_tup_ins as inserts,
-          n_tup_upd as updates,
-          n_tup_del as deletes,
-          n_live_tup as live_tuples,
-          n_dead_tup as dead_tuples
-        FROM pg_stat_user_tables
-        ORDER BY n_live_tup DESC;
+          t.relname as table_name,
+          COALESCE(s.n_tup_ins, 0) as inserts,
+          COALESCE(s.n_tup_upd, 0) as updates,
+          COALESCE(s.n_tup_del, 0) as deletes,
+          COALESCE(s.n_live_tup, 0) as live_tuples,
+          COALESCE(s.n_dead_tup, 0) as dead_tuples
+        FROM pg_class t
+        LEFT JOIN pg_stat_user_tables s ON s.relid = t.oid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'public' AND t.relkind = 'r'
+        ORDER BY COALESCE(s.n_live_tup, 0) DESC;
       `;
 
       // MongoDB stats
@@ -164,29 +171,76 @@ export class DatabaseIndexesService {
 
       // PostgreSQL recommendations
       try {
-        const slowQueries = await this.prisma.$queryRaw`
-          SELECT 
-            query,
-            calls,
-            total_time,
-            mean_time,
-            rows
-          FROM pg_stat_statements
-          WHERE mean_time > 100
-          ORDER BY mean_time DESC
-          LIMIT 10;
+        // First check if pg_stat_statements extension is available
+        const extensionCheck = await this.prisma.$queryRaw`
+          SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
         `;
+        
+        if ((extensionCheck as any[]).length > 0) {
+          // Extension is available, use it for slow query analysis
+          const slowQueries = await this.prisma.$queryRaw`
+            SELECT 
+              query,
+              calls,
+              total_time,
+              mean_time,
+              rows
+            FROM pg_stat_statements
+            WHERE mean_time > 100
+            ORDER BY mean_time DESC
+            LIMIT 10;
+          `;
 
-        if ((slowQueries as any[]).length > 0) {
+          if ((slowQueries as any[]).length > 0) {
+            recommendations.push({
+              database: 'PostgreSQL',
+              type: 'slow_queries',
+              data: slowQueries,
+              suggestion: 'Consider adding indexes for frequently slow queries',
+            });
+          }
+        } else {
+          // Extension not available, provide alternative analysis
+          const tableStats = await this.prisma.$queryRaw`
+            SELECT 
+              t.relname as table_name,
+              COALESCE(s.n_tup_ins, 0) as inserts,
+              COALESCE(s.n_tup_upd, 0) as updates,
+              COALESCE(s.n_live_tup, 0) as live_tuples,
+              COALESCE(s.n_dead_tup, 0) as dead_tuples
+            FROM pg_class t
+            LEFT JOIN pg_stat_user_tables s ON s.relid = t.oid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = 'public' AND t.relkind = 'r'
+            AND (COALESCE(s.n_live_tup, 0) > 1000 OR COALESCE(s.n_dead_tup, 0) > 100)
+            ORDER BY COALESCE(s.n_live_tup, 0) DESC;
+          `;
+
+          if ((tableStats as any[]).length > 0) {
+            recommendations.push({
+              database: 'PostgreSQL',
+              type: 'table_performance',
+              data: tableStats,
+              suggestion: 'Consider adding indexes for tables with high activity or dead tuples',
+            });
+          }
+
+          // Add recommendation to enable pg_stat_statements for better monitoring
           recommendations.push({
             database: 'PostgreSQL',
-            type: 'slow_queries',
-            data: slowQueries,
-            suggestion: 'Consider adding indexes for frequently slow queries',
+            type: 'extension_recommendation',
+            suggestion: 'Enable pg_stat_statements extension for detailed query performance monitoring: CREATE EXTENSION pg_stat_statements;',
           });
         }
       } catch (pgError) {
-        this.logger.warn('Failed to analyze PostgreSQL slow queries:', pgError);
+        this.logger.warn('Failed to analyze PostgreSQL performance:', pgError);
+        
+        // Fallback recommendation
+        recommendations.push({
+          database: 'PostgreSQL',
+          type: 'monitoring_setup',
+          suggestion: 'Consider enabling performance monitoring extensions for better query analysis',
+        });
       }
 
       // MongoDB recommendations
