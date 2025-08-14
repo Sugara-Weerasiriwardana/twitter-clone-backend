@@ -6,6 +6,13 @@ import { RedisService } from '../redis/redis.service';
 import { CreatePostDto, UpdatePostDto } from './dto';
 import { Post, PostDocument } from './schemas/post.schema';
 
+interface PollData {
+  question: string;
+  options: string[];
+  expiresAt?: string;
+  userId: string;
+}
+
 interface FindAllOptions {
   page: number;
   limit: number;
@@ -26,9 +33,11 @@ export class PostsService {
     private redisService: RedisService,
   ) {}
 
-  async create(createPostDto: CreatePostDto, pollDto?: any): Promise<Post> {
+  async create(createPostDto: CreatePostDto & { poll?: PollData }): Promise<Post> {
+    const { poll, ...postData } = createPostDto;
+    
     const post = new this.postModel({
-      ...createPostDto,
+      ...postData,
       poll_id: null,
       likes: [],
       retweets: [],
@@ -45,34 +54,37 @@ export class PostsService {
 
     const savedPost = await post.save();
 
-    if (pollDto) {
+    if (poll) {
       try {
         // First, ensure the user exists in PostgreSQL
         const existingUser = await this.prisma.user.findUnique({
-          where: { id: pollDto.userId }
+          where: { id: poll.userId }
         });
 
         if (!existingUser) {
           // Create a basic user if it doesn't exist
           await this.prisma.user.create({
             data: {
-              id: pollDto.userId,
-              keycloakId: pollDto.userId, // Using userId as keycloakId for simplicity
-              username: `user_${pollDto.userId}`,
-              email: `${pollDto.userId}@example.com`,
-              displayName: `User ${pollDto.userId}`,
+              id: poll.userId,
+              keycloakId: poll.userId, // Using userId as keycloakId for simplicity
+              username: `user_${poll.userId}`,
+              email: `${poll.userId}@example.com`,
+              displayName: `User ${poll.userId}`,
             }
           });
         }
 
-        const poll = await this.prisma.poll.create({
+        const pollRecord = await this.prisma.poll.create({
           data: {
-            ...pollDto,
+            question: poll.question,
+            options: poll.options,
+            expiresAt: poll.expiresAt ? new Date(poll.expiresAt) : null,
+            userId: poll.userId,
             postId: savedPost._id.toString(),
           },
         });
         
-        savedPost.poll_id = poll.id;
+        savedPost.poll_id = pollRecord.id;
         await savedPost.save();
       } catch (error) {
         console.error('Error creating poll:', error);

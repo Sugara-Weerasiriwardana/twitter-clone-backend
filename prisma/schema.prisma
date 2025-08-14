@@ -9,20 +9,20 @@ datasource db {
 
 model User {
   id          String     @id @default(uuid())
-  keycloakId  String?     @unique @map("keycloak_id")
-  username    String?     @unique
+  keycloakId  String?    @unique @map("keycloak_id")
+  username    String?    @unique
   email       String     @unique
   displayName String?    @map("display_name")
   bio         String?
   avatarUrl   String?    @map("avatar_url")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
+  password    String?
+  preferences Json?
   followers   Follow[]   @relation("UserFollowers")
   following   Follow[]   @relation("UserFollowing")
   pollVotes   PollVote[]
   polls       Poll[]
-  password    String?
-  preferences Json?
 
   @@map("users")
   @@index([createdAt], name: "idx_users_created_at")

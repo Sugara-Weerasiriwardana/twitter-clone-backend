@@ -42,4 +42,6 @@ export class CreatePostDto {
   @IsOptional()
   @IsArray()
   mentions?: string[];
+
+
 } 
