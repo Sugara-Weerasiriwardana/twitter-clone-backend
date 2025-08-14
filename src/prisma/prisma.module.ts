@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { DatabaseIndexesService } from './database-indexes.service';
 import { DatabaseMonitoringController } from './database-monitoring.controller';
 import { PrismaService } from './prisma.service';
 
+@Global()
 @Module({
   providers: [PrismaService, DatabaseIndexesService],
   exports: [PrismaService, DatabaseIndexesService],
