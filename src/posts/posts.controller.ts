@@ -11,8 +11,9 @@ import {
   UseInterceptors
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+
 import { CreatePostDto, UpdatePostDto } from './dto';
 import { PostsService } from './posts.service';
 
@@ -25,92 +26,137 @@ export class PostsController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new post' })
-  @ApiBody({ type: CreatePostDto })
+  @UseInterceptors(FilesInterceptor('files'))
+  @ApiOperation({ 
+    summary: 'Create a new post (supports text, media uploads, and polls)',
+    description: `
+    Unified endpoint for creating posts with the following capabilities:
+    
+    1. Text-only post: Send content and authorId
+    2. Post with media: Include files in the request
+    3. Post with poll: Include poll data in the form
+    4. Post with media + poll: Combine all features
+    
+    Examples:
+    - Text post: POST with content and authorId
+    - Media post: POST with content, authorId, and files
+    - Poll post: POST with content, authorId, and poll[question], poll[options][], etc.
+    - Full post: POST with content, authorId, files, and poll data
+    `
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ 
+    schema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'Post content',
+          example: 'What\'s your favorite programming language? Vote now! #coding'
+        },
+        authorId: {
+          type: 'string',
+          description: 'Author ID',
+          example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+        },
+        hashtags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of hashtags',
+          example: ['coding', 'poll']
+        },
+        mentions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of user mentions',
+          example: ['@john', '@jane']
+        },
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'Media files to upload'
+        },
+        'poll[question]': { 
+          type: 'string', 
+          example: 'What\'s your favorite programming language?',
+          description: 'Poll question'
+        },
+        'poll[options][]': { 
+          type: 'array', 
+          items: { type: 'string' },
+          example: ['JavaScript', 'Python', 'Java', 'TypeScript'],
+          description: 'Poll options array'
+        },
+        'poll[expiresAt]': { 
+          type: 'string', 
+          format: 'date-time', 
+          example: '2024-12-31T23:59:59Z',
+          description: 'Poll expiration date'
+        },
+        'poll[userId]': { 
+          type: 'string', 
+          example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+          description: 'User ID who created the poll'
+        }
+      },
+      required: ['content', 'authorId']
+    }
+  })
   @ApiResponse({ 
     status: 201, 
     description: 'Post created successfully',
     schema: {
-              example: {
-          _id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-          content: 'Advance Js project',
-          authorId: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-          media: [],
-          hashtags: ['coding', 'programming'],
-          mentions: [],
-          likes: [],
-          retweets: [],
-          bookmarks: [],
-          replies: [],
-          views: 0,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        }
-    }
-  })
-  async create(
-    @Body() createPostDto: CreatePostDto,
-  ) {
-    return this.postsService.create(createPostDto);
-  }
-
-  @Post('with-poll')
-  @ApiOperation({ summary: 'Create a new post with poll' })
-  @ApiBody({ 
-    schema: {
-      example: {
-        content: "What's your favorite programming language? Vote now! #coding",
-        authorId: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
-        hashtags: ["coding", "poll"],
-        poll: {
-          question: "What's your favorite programming language?",
-          options: ["JavaScript", "Python", "Java", "TypeScript"],
-          expiresAt: "2024-12-31T23:59:59Z",
-          userId: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
-        }
-      }
-    }
-  })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Post with poll created successfully',
-    schema: {
       example: {
         _id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-        content: "What's your favorite programming language? Vote now! #coding",
+        content: 'What\'s your favorite programming language? Vote now! #coding',
         authorId: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-        poll_id: 'poll123',
+        media: ['https://res.cloudinary.com/example/image1.jpg'],
         hashtags: ['coding', 'poll'],
-        createdAt: '2024-01-01T00:00:00Z'
+        poll_id: 'poll123',
+        likes: [],
+        retweets: [],
+        bookmarks: [],
+        replies: [],
+        views: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z'
       }
     }
   })
-  async createWithPoll(
-    @Body() createPostDto: CreatePostDto,
-    @Body('poll') pollDto: any,
-  ) {
-    return this.postsService.create(createPostDto, pollDto);
-  }
-
-  @Post('with-media')
-  @UseInterceptors(FilesInterceptor('files'))
-  @ApiOperation({ summary: 'Create a post with media upload' })
-  @ApiResponse({ status: 201, description: 'Post with media created successfully' })
-  async createWithMedia(
+  async createPost(
     @Body() createPostDto: CreatePostDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const mediaUrls = [];
+    // Handle media uploads if files are provided
+    let mediaUrls: string[] = [];
     if (files && files.length > 0) {
       for (const file of files) {
         const result = await this.cloudinaryService.uploadMedia(file);
         mediaUrls.push(result.url);
       }
     }
-    
+
+    // Parse poll data from form data if it exists
+    let pollData = null;
+    if (createPostDto['poll[question]']) {
+      pollData = {
+        question: createPostDto['poll[question]'],
+        options: Array.isArray(createPostDto['poll[options][]']) 
+          ? createPostDto['poll[options][]'] 
+          : [createPostDto['poll[options][]']],
+        expiresAt: createPostDto['poll[expiresAt]'],
+        userId: createPostDto['poll[userId]']
+      };
+    }
+
+    // Merge uploaded media URLs with any pre-existing URLs from DTO
+    const finalMediaUrls = [...(createPostDto.media || []), ...mediaUrls];
+
+    // Create post with all data
     return this.postsService.create({
       ...createPostDto,
-      media: mediaUrls,
+      media: finalMediaUrls,
+      poll: pollData,
     });
   }
 
