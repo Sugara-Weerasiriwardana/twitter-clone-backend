@@ -67,3 +67,16 @@ export class Post {
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
+
+PostSchema.index({ authorId: 1, createdAt: -1 }); 
+PostSchema.index({ createdAt: -1 }); 
+PostSchema.index({ hashtags: 1 }); 
+PostSchema.index({ mentions: 1 }); 
+PostSchema.index({ isDeleted: 1, createdAt: -1 }); 
+PostSchema.index({ parentPostId: 1 }); 
+PostSchema.index({ originalPostId: 1 }); 
+PostSchema.index({ likes: 1 }); 
+PostSchema.index({ retweets: 1 });
+PostSchema.index({ visibility: 1, createdAt: -1 }); 
+PostSchema.index({ isPinned: 1, authorId: 1 }); 
+PostSchema.index({ views: -1, createdAt: -1 }); 

@@ -25,6 +25,9 @@ model User {
   preferences Json?
 
   @@map("users")
+  @@index([createdAt], name: "idx_users_created_at")
+  @@index([username], name: "idx_users_username")
+  @@index([email], name: "idx_users_email")
 }
 
 model Follow {
@@ -36,6 +39,9 @@ model Follow {
 
   @@id([followerId, followingId])
   @@map("follows")
+  @@index([followerId], name: "idx_follows_follower_id")
+  @@index([followingId], name: "idx_follows_following_id")
+  @@index([createdAt], name: "idx_follows_created_at")
 }
 
 model Poll {
@@ -50,6 +56,10 @@ model Poll {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("polls")
+  @@index([postId], name: "idx_polls_post_id")
+  @@index([userId], name: "idx_polls_user_id")
+  @@index([createdAt], name: "idx_polls_created_at")
+  @@index([expiresAt], name: "idx_polls_expires_at")
 }
 
 model PollVote {
@@ -63,4 +73,7 @@ model PollVote {
 
   @@unique([pollId, userId])
   @@map("poll_votes")
+  @@index([pollId], name: "idx_poll_votes_poll_id")
+  @@index([userId], name: "idx_poll_votes_user_id")
+  @@index([createdAt], name: "idx_poll_votes_created_at")
 }

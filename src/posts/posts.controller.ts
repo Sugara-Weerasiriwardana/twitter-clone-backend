@@ -13,6 +13,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { DatabaseIndexesService } from '../prisma/database-indexes.service';
 import { CreatePostDto, UpdatePostDto } from './dto';
 import { PostsService } from './posts.service';
 
@@ -22,6 +23,7 @@ export class PostsController {
   constructor(
     private readonly postsService: PostsService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly databaseIndexesService: DatabaseIndexesService,
   ) {}
 
   @Post()
@@ -379,6 +381,25 @@ export class PostsController {
   })
   async testRedis() {
     return this.postsService.testRedisCache();
+  }
+
+  @Get('test/db-indexes')
+  @ApiOperation({ summary: 'Test database indexes service' })
+  async testDatabaseIndexes() {
+    try {
+      const postgresIndexes = await this.databaseIndexesService.getPostgresIndexes();
+      return {
+        message: 'Database indexes service is working',
+        postgresIndexes: postgresIndexes.total,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        message: 'Database indexes service error',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 
   @Get('timeline')
