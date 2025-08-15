@@ -59,6 +59,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Prisma
 # /generated/prisma
 # prisma/migrations/
+generated/prisma
+prisma/migrations/
 
 # Database
 *.db
