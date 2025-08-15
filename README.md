@@ -33,6 +33,9 @@ A robust, scalable backend API for a Twitter like social media platform built wi
 - **Search & Filtering**: Advanced search capabilities
 - **File Upload**: Multipart form data support
 
+### Architecture
+
+<img width="561" height="502" alt="twitter_clone" src="https://github.com/user-attachments/assets/703e2602-795e-45ed-bfb5-90bb0932e0a9" />
 
 ### Key Design Patterns
 
