@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
+import { FollowersModule } from './followers/followers.module';
 
 
 @Module({
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
     ProfileModule,
     NotificationsModule,
     UsersModule,
+    FollowersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
