@@ -8,7 +8,7 @@ A robust, scalable backend API for a Twitter like social media platform built wi
 - **User Management**: Complete CRUD operations with authentication
 - **Post System**: Create, read, update, delete posts with media support
 - **Poll System**: Interactive polls with voting capabilities
-- **Comment System**: Nested comments with threading support
+- **Comment System**: Nested comments
 - **Follow System**: User following/followers management
 - **Real-time Notifications**: WebSocket-based notification system
 - **Media Upload**: Cloudinary integration for image/video uploads
@@ -151,7 +151,7 @@ http://localhost:3000/api-docs
 
 ### MongoDB Collections (Document Data)
 - **posts**: Social media posts with media and metadata
-- **comments**: Post comments with threading support
+- **comments**: Post comments
 - **notifications**: User notifications and alerts
 
 ### Data Flow Strategy
