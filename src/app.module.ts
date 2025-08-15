@@ -13,6 +13,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { UsersModule } from './users/users.module';
 
 
 @Module({
@@ -29,6 +30,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     ProfileModule,
     NotificationsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

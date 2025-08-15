@@ -30,20 +30,8 @@ export class PostsController {
   @UseInterceptors(FilesInterceptor('files'))
   @ApiOperation({ 
     summary: 'Create a new post (supports text, media uploads, and polls)',
-    description: `
-    Unified endpoint for creating posts with the following capabilities:
-    
-    1. Text-only post: Send content and authorId
-    2. Post with media: Include files in the request
-    3. Post with poll: Include poll data in the form
-    4. Post with media + poll: Combine all features
-    
-    Examples:
-    - Text post: POST with content and authorId
-    - Media post: POST with content, authorId, and files
-    - Poll post: POST with content, authorId, and poll[question], poll[options][], etc.
-    - Full post: POST with content, authorId, files, and poll data
-    `
+    description: `Post API examples
+   `
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ 
