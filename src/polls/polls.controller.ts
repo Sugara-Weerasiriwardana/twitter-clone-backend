@@ -10,11 +10,14 @@ export class PollsController {
   constructor(private readonly pollsService: PollsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new poll' })
+  @ApiOperation({ 
+    summary: 'Create a new poll with automatic post creation',
+    description: 'Creates a poll and automatically creates an associated post. The poll will be linked to the post via postId.'
+  })
   @ApiBody({ type: CreatePollDto })
   @ApiResponse({ 
     status: 201, 
-    description: 'Poll created successfully',
+    description: 'Poll created successfully with associated post',
     schema: {
               example: {
           id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',

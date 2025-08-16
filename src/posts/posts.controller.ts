@@ -1,14 +1,14 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  UploadedFiles,
-  UseInterceptors
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    Post,
+    Put,
+    Query,
+    UploadedFiles,
+    UseInterceptors
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -284,7 +284,7 @@ export class PostsController {
       }
     }
   })
-  @ApiResponse({ status: 200, description: 'Post retweeted successfully' })
+  @ApiResponse({ status: 200, description: 'Post retweeted successfully - returns updated post' })
   async retweetPost(@Param('id') id: string, @Body('userId') userId: string) {
     return this.postsService.retweetPost(id, userId);
   }
@@ -299,7 +299,7 @@ export class PostsController {
       }
     }
   })
-  @ApiResponse({ status: 200, description: 'Retweet removed successfully' })
+  @ApiResponse({ status: 200, description: 'Retweet removed successfully - returns updated post' })
   async unretweetPost(@Param('id') id: string, @Body('userId') userId: string) {
     return this.postsService.unretweetPost(id, userId);
   }

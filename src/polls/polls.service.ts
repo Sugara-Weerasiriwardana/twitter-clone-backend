@@ -1,40 +1,100 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Post, PostDocument } from '../posts/schemas/post.schema';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { VotePollDto } from './dto/vote-poll.dto';
 
 @Injectable()
 export class PollsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectModel(Post.name) private postModel: Model<PostDocument>,
+  ) {
+    // Test MongoDB connection on service initialization
+    this.testMongoConnection();
+  }
+
+  private async testMongoConnection() {
+    try {
+      // Try to perform a simple operation to test connection
+      const count = await this.postModel.countDocuments();
+      console.log('✅ MongoDB connection successful. Posts count:', count);
+    } catch (error) {
+      console.error('❌ MongoDB connection failed:', error.message);
+    }
+  }
 
   async createPoll(createPollDto: CreatePollDto) {
-    const { question, options, expiresAt, userId } = createPollDto;
+    const { question, options, expiresAt, userId, postContent, hashtags } = createPollDto;
 
-    // Check if user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    try {
+      // Check if user exists
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Create a post automatically for the poll
+      const defaultPostContent = postContent || `Poll: ${question}`;
+      const defaultHashtags = hashtags || ['poll'];
+      
+      const post = new this.postModel({
+        content: defaultPostContent,
+        authorId: userId,
+        hashtags: defaultHashtags,
+        poll_id: null,
+        likes: [],
+        retweets: [],
+        bookmarks: [],
+        replies: [],
+        isRetweet: false,
+        isEdited: false,
+        visibility: 'public',
+        isPinned: false,
+        views: 0,
+        reportedBy: [],
+        isDeleted: false,
+      });
+
+      const savedPost = await post.save();
+
+      // Create poll with the post ID
+      const poll = await this.prisma.poll.create({
+        data: {
+          question,
+          options: options,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+          userId,
+          postId: savedPost._id.toString(),
+        },
+        include: {
+          votes: true,
+          user: true,
+        },
+      });
+
+      // Update the post with the poll ID
+      savedPost.poll_id = poll.id;
+      await savedPost.save();
+
+      // Ensure postId is properly returned in the response
+      const pollResponse = {
+        ...poll,
+        postId: savedPost._id.toString(),
+      };
+      
+      return pollResponse;
+    } catch (error) {
+      if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+        throw new BadRequestException(`Database error: ${error.message}`);
+      }
+      throw error;
     }
-
-    // Create poll
-    const poll = await this.prisma.poll.create({
-      data: {
-        question,
-        options: options, // This will be stored as JSON
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-        userId,
-        postId: '', // This will be updated when linked to a post
-      },
-      include: {
-        votes: true,
-        user: true,
-      },
-    });
-
-    return poll;
   }
 
   async votePoll(pollId: string, votePollDto: VotePollDto) {

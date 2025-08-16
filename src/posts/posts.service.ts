@@ -228,10 +228,11 @@ export class PostsService {
     originalPost.retweets.push(userId);
     await originalPost.save();
 
-    return retweet;
+    // Return the updated original post instead of the retweet post
+    return originalPost;
   }
 
-  async unretweetPost(id: string, userId: string): Promise<{ message: string }> {
+  async unretweetPost(id: string, userId: string): Promise<Post> {
     const originalPost = await this.postModel.findOne({ _id: id, isDeleted: false }).exec();
     if (!originalPost) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
@@ -248,7 +249,8 @@ export class PostsService {
       isRetweet: true,
     });
 
-    return { message: 'Retweet removed successfully' };
+    // Return the updated original post instead of just a message
+    return originalPost;
   }
 
   async getReplies(id: string, options: PaginationOptions): Promise<{ replies: Post[]; total: number; page: number; limit: number }> {

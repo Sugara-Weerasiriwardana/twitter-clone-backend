@@ -35,4 +35,23 @@ export class CreatePollDto {
   @IsNotEmpty()
   @IsString()
   userId: string;
+
+  @ApiProperty({ 
+    description: 'Optional custom post content for the poll', 
+    example: 'Vote on your favorite programming language! #coding #poll', 
+    required: false 
+  })
+  @IsOptional()
+  @IsString()
+  postContent?: string;
+
+  @ApiProperty({ 
+    description: 'Optional hashtags for the post', 
+    example: ['coding', 'poll', 'programming'], 
+    required: false 
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  hashtags?: string[];
 }
