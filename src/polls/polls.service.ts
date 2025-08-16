@@ -189,6 +189,20 @@ export class PollsService {
     };
   }
 
+  async getPollById(pollId: string) {
+    const poll = await this.prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { votes: true, user: true },
+    });
+
+    if (!poll) {
+      throw new NotFoundException('Poll not found');
+    }
+
+    // Return a shape similar to getPollResults but without aggregation
+    return poll;
+  }
+
   async getActivePolls(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 

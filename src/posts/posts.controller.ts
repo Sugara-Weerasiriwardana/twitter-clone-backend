@@ -8,7 +8,9 @@ import {
     Put,
     Query,
     UploadedFiles,
-    UseInterceptors
+    UseInterceptors,
+  BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -119,24 +121,46 @@ export class PostsController {
     // Handle media uploads if files are provided
     let mediaUrls: string[] = [];
     if (files && files.length > 0) {
-      for (const file of files) {
-        const result = await this.cloudinaryService.uploadMedia(file);
-        mediaUrls.push(result.url);
+      const uploads = files.map((file) => this.cloudinaryService.uploadMedia(file));
+      const results = await Promise.all(uploads);
+      mediaUrls = results.map((r) => r.url).filter(Boolean);
+    }
+
+    // Parse poll data from request (supports both multipart bracket syntax and JSON body { poll: { ... } })
+    let pollData: any = undefined;
+    const anyDto: any = createPostDto as any;
+    // Multipart style: poll[question], poll[options][], poll[expiresAt], poll[userId]
+    if (anyDto['poll[question]']) {
+      pollData = {
+        question: anyDto['poll[question]'],
+        options: Array.isArray(anyDto['poll[options][]'])
+          ? anyDto['poll[options][]']
+          : (anyDto['poll[options][]'] ? [anyDto['poll[options][]']] : []),
+        expiresAt: anyDto['poll[expiresAt]'],
+        userId: anyDto['poll[userId]']
+      };
+    } else if (anyDto.poll && typeof anyDto.poll === 'object') {
+      // JSON style: poll: { question, options[], expiresAt?, userId }
+      const p = anyDto.poll;
+      if (p.question && Array.isArray(p.options) && p.options.length >= 2 && p.userId) {
+        pollData = {
+          question: p.question,
+          options: p.options,
+          expiresAt: p.expiresAt,
+          userId: p.userId,
+        };
       }
     }
 
-    // Parse poll data from form data if it exists
-    let pollData = null;
-    if (createPostDto['poll[question]']) {
-      pollData = {
-        question: createPostDto['poll[question]'],
-        options: Array.isArray(createPostDto['poll[options][]']) 
-          ? createPostDto['poll[options][]'] 
-          : [createPostDto['poll[options][]']],
-        expiresAt: createPostDto['poll[expiresAt]'],
-        userId: createPostDto['poll[userId]']
-      };
-    }
+    // Normalize arrays coming from multipart form (support both 'hashtags' and 'hashtags[]', same for mentions)
+    const rawHashtags = anyDto['hashtags[]'] ?? anyDto.hashtags;
+    const rawMentions = anyDto['mentions[]'] ?? anyDto.mentions;
+    const hashtags = Array.isArray(rawHashtags)
+      ? rawHashtags
+      : (typeof rawHashtags === 'string' && rawHashtags.length > 0 ? [rawHashtags] : undefined);
+    const mentions = Array.isArray(rawMentions)
+      ? rawMentions
+      : (typeof rawMentions === 'string' && rawMentions.length > 0 ? [rawMentions] : undefined);
 
     // Merge uploaded media URLs with any pre-existing URLs from DTO
     const finalMediaUrls = [...(createPostDto.media || []), ...mediaUrls];
@@ -144,8 +168,11 @@ export class PostsController {
     // Create post with all data
     return this.postsService.create({
       ...createPostDto,
+      hashtags: hashtags ?? createPostDto.hashtags,
+      mentions: mentions ?? createPostDto.mentions,
       media: finalMediaUrls,
-      poll: pollData,
+  // Only include poll if parsed/found
+  ...(pollData ? { poll: pollData } : {}),
     });
   }
 
@@ -196,6 +223,29 @@ export class PostsController {
 
 
 
+
+  @Get('liked')
+  @ApiOperation({ summary: 'Get posts liked by a specific user' })
+  @ApiQuery({ name: 'userId', description: 'User ID', required: true, example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef' })
+  @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', description: 'Number of posts per page', required: false, type: Number, example: 10 })
+  async getLikedPosts(
+    @Query('userId') userId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    try {
+      if (!userId) {
+        throw new BadRequestException('userId is required');
+      }
+      const pageNum = Number.parseInt(page as any) || 1;
+      const limitNum = Number.parseInt(limit as any) || 10;
+      return await this.postsService.findLikedByUser(userId, { page: pageNum, limit: limitNum });
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      throw new InternalServerErrorException(e?.message || 'Failed to fetch liked posts');
+    }
+  }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific post by ID' })
@@ -467,4 +517,5 @@ export class PostsController {
   ) {
     return this.postsService.getTimeline(userId, { page: parseInt(page), limit: parseInt(limit) });
   }
+
 }

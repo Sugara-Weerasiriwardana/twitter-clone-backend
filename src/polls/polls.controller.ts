@@ -61,6 +61,15 @@ export class PollsController {
     return this.pollsService.votePoll(id, votePollDto);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a poll by ID' })
+  @ApiParam({ name: 'id', description: 'Poll ID', example: 'poll123' })
+  @ApiResponse({ status: 200, description: 'Poll retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async getPoll(@Param('id') id: string) {
+    return this.pollsService.getPollById(id);
+  }
+
   @Get(':id/results')
   @ApiOperation({ summary: 'Get poll results' })
   @ApiParam({ name: 'id', description: 'Poll ID', example: 'poll123' })

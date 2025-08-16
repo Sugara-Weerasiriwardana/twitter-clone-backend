@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreatePostDto, UpdatePostDto } from './dto';
 import { Post, PostDocument } from './schemas/post.schema';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FollowersService } from '../followers/followers.service';
 
 interface PollData {
   question: string;
@@ -31,6 +34,9 @@ export class PostsService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private prisma: PrismaService,
     private redisService: RedisService,
+    @Optional() private notificationsGateway?: NotificationsGateway,
+    @Optional() private notificationsService?: NotificationsService,
+    @Optional() private followersService?: FollowersService,
   ) {}
 
   async create(createPostDto: CreatePostDto & { poll?: PollData }): Promise<Post> {
@@ -53,6 +59,11 @@ export class PostsService {
     });
 
     const savedPost = await post.save();
+
+    // Broadcast new post to real-time feed
+    if (this.notificationsGateway) {
+      this.notificationsGateway.broadcastNewPost(savedPost);
+    }
 
     if (poll) {
       try {
@@ -90,6 +101,36 @@ export class PostsService {
         console.error('Error creating poll:', error);
         // Continue without poll if there's an error
       }
+    }
+
+    // Notify followers about the new post
+    if (this.notificationsService && this.followersService) {
+      try {
+        console.log(`[PostsService] Getting followers for user: ${savedPost.authorId}`);
+        const followers = await this.followersService.getFollowers(savedPost.authorId);
+        console.log(`[PostsService] Found ${followers.length} followers:`, followers);
+        
+        // Send notifications to all followers
+        for (const follower of followers) {
+          console.log(`[PostsService] Creating notification for follower: ${follower.followerId}`);
+          await this.notificationsService.create(
+            follower.followerId,
+            'new_post',
+            `${savedPost.authorId} posted something new`,
+            {
+              postId: savedPost._id.toString(),
+              fromUserId: savedPost.authorId,
+            }
+          );
+          console.log(`[PostsService] Notification created successfully for: ${follower.followerId}`);
+        }
+        console.log(`[PostsService] All follower notifications sent successfully`);
+      } catch (error) {
+        console.error('Error sending follower notifications:', error);
+        // Continue without notifications if there's an error
+      }
+    } else {
+      console.log(`[PostsService] Missing services - notificationsService: ${!!this.notificationsService}, followersService: ${!!this.followersService}`);
     }
 
     return savedPost;
@@ -166,6 +207,9 @@ export class PostsService {
   }
 
   async likePost(id: string, userId: string): Promise<Post> {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
     const post = await this.postModel.findOne({ _id: id, isDeleted: false }).exec();
     if (!post) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
@@ -174,12 +218,50 @@ export class PostsService {
     if (!post.likes.includes(userId)) {
       post.likes.push(userId);
       await post.save();
+
+      // Broadcast post update for real-time feed
+      if (this.notificationsGateway) {
+        this.notificationsGateway.broadcastPostUpdate(id, 'like', {
+          userId,
+          likesCount: post.likes.length
+        });
+
+        // Send notification to post author if not self-like
+        if (post.authorId !== userId) {
+          // Store notification in database
+          if (this.notificationsService) {
+            await this.notificationsService.create(
+              post.authorId,
+              'like',
+              `Your post was liked!`,
+              {
+                postId: id,
+                fromUserId: userId,
+              }
+            );
+          }
+
+          // Send real-time notification
+          if (this.notificationsGateway) {
+            this.notificationsGateway.sendRealTimeNotification(post.authorId, {
+              type: 'like',
+              message: `Your post was liked!`,
+              postId: id,
+              userId,
+              timestamp: new Date()
+            });
+          }
+        }
+      }
     }
 
     return post;
   }
 
   async unlikePost(id: string, userId: string): Promise<Post> {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
     const post = await this.postModel.findOne({ _id: id, isDeleted: false }).exec();
     if (!post) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
@@ -188,17 +270,28 @@ export class PostsService {
     post.likes = post.likes.filter(likeId => likeId !== userId);
     await post.save();
 
+    // Broadcast post update for real-time feed
+    if (this.notificationsGateway) {
+      this.notificationsGateway.broadcastPostUpdate(id, 'unlike', {
+        userId,
+        likesCount: post.likes.length
+      });
+    }
+
     return post;
   }
 
   async retweetPost(id: string, userId: string): Promise<Post> {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
     const originalPost = await this.postModel.findOne({ _id: id, isDeleted: false }).exec();
     if (!originalPost) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
     }
 //  check if user already retweeted
     if (originalPost.retweets.includes(userId)) {
-      throw new Error('User has already retweeted this post');
+      throw new BadRequestException('User has already retweeted this post');
     }
 
 //   create retweet post function
@@ -228,11 +321,47 @@ export class PostsService {
     originalPost.retweets.push(userId);
     await originalPost.save();
 
-    // Return the updated original post instead of the retweet post
-    return originalPost;
+    // Broadcast retweet to real-time feed
+    if (this.notificationsGateway) {
+      this.notificationsGateway.broadcastNewPost(retweet);
+      this.notificationsGateway.broadcastPostUpdate(id, 'retweet', {
+        userId,
+        retweetsCount: originalPost.retweets.length
+      });
+
+      // Send notification to original post author
+      if (originalPost.authorId !== userId) {
+        // Store notification in database
+        if (this.notificationsService) {
+          await this.notificationsService.create(
+            originalPost.authorId,
+            'retweet',
+            `Your post was retweeted!`,
+            {
+              postId: id,
+              fromUserId: userId,
+            }
+          );
+        }
+
+        // Send real-time notification
+        this.notificationsGateway.sendRealTimeNotification(originalPost.authorId, {
+          type: 'retweet',
+          message: `Your post was retweeted!`,
+          postId: id,
+          userId,
+          timestamp: new Date()
+        });
+      }
+    }
+
+    return retweet;
   }
 
-  async unretweetPost(id: string, userId: string): Promise<Post> {
+  async unretweetPost(id: string, userId: string): Promise<{ message: string }> {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
     const originalPost = await this.postModel.findOne({ _id: id, isDeleted: false }).exec();
     if (!originalPost) {
       throw new NotFoundException(`Post with ID ${id} not found or has been deleted`);
@@ -249,8 +378,7 @@ export class PostsService {
       isRetweet: true,
     });
 
-    // Return the updated original post instead of just a message
-    return originalPost;
+    return { message: 'Retweet removed successfully' };
   }
 
   async getReplies(id: string, options: PaginationOptions): Promise<{ replies: Post[]; total: number; page: number; limit: number }> {
@@ -302,6 +430,26 @@ export class PostsService {
     // Update parent post replies count
     parentPost.replies.push(savedReply._id.toString());
     await parentPost.save();
+
+    // Broadcast reply to real-time feed
+    if (this.notificationsGateway) {
+      this.notificationsGateway.broadcastNewPost(savedReply);
+      this.notificationsGateway.broadcastPostUpdate(id, 'reply', {
+        userId: createPostDto.authorId,
+        repliesCount: parentPost.replies.length
+      });
+
+      // Send notification to parent post author
+      if (parentPost.authorId !== createPostDto.authorId) {
+        this.notificationsGateway.sendRealTimeNotification(parentPost.authorId, {
+          type: 'reply',
+          message: `Someone replied to your post!`,
+          postId: id,
+          userId: createPostDto.authorId,
+          timestamp: new Date()
+        });
+      }
+    }
 
     return savedReply;
   }
@@ -433,5 +581,22 @@ export class PostsService {
     await this.redisService.cacheFeed(cacheKey, timeline, 300);
 
     return timeline;
+  }
+
+  async findLikedByUser(userId: string, options: PaginationOptions): Promise<{ posts: Post[]; total: number; page: number; limit: number }> {
+    const { page, limit } = options;
+    const skip = (page - 1) * limit;
+
+    const [posts, total] = await Promise.all([
+      this.postModel
+        .find({ likes: { $in: [userId] }, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.postModel.countDocuments({ likes: { $in: [userId] }, isDeleted: false }).exec(),
+    ]);
+
+    return { posts, total, page, limit };
   }
 }
